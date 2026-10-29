@@ -1313,6 +1313,7 @@ type ExpandedJob = {
   inputDefaults?: Record<string, string>;
   workflowCallOutputDefs?: Record<string, string>;
   callerJobId?: string;
+  workflowSource?: ExpandedJobEntry["workflowSource"];
   runnerName: string;
   services?: Awaited<ReturnType<typeof parseWorkflowServices>>;
   container?: Awaited<ReturnType<typeof parseWorkflowContainer>>;
@@ -1344,6 +1345,7 @@ async function expandJobs(
         inputDefaults: entry.inputDefaults,
         workflowCallOutputDefs: entry.workflowCallOutputDefs,
         callerJobId: entry.callerJobId,
+        workflowSource: entry.workflowSource,
       });
       continue;
     }
@@ -1365,6 +1367,7 @@ async function expandJobs(
         inputDefaults: entry.inputDefaults,
         workflowCallOutputDefs: entry.workflowCallOutputDefs,
         callerJobId: entry.callerJobId,
+        workflowSource: entry.workflowSource,
       });
     }
   }
@@ -1659,6 +1662,7 @@ async function handleWorkflow(options: {
       undefined,
       inputsContext,
       vars,
+      ej.workflowSource,
     );
     const expressionContext = {
       repoPath: repoRoot,
@@ -1828,6 +1832,7 @@ async function handleWorkflow(options: {
       needsContext,
       inputsContext,
       vars,
+      ej.workflowSource,
     );
     const expressionContext = {
       repoPath: repoRoot,

@@ -63,7 +63,6 @@ jobs:
       - run: echo lint
 `,
     );
-
     const callerWf = path.join(wfDir, "ci.yml");
     fs.writeFileSync(
       callerWf,
@@ -82,6 +81,68 @@ jobs:
       sourceTaskName: "lint",
       needs: [],
       callerJobId: "lint",
+    });
+  });
+
+  it("resolves repository-root aliases in fetched reusable workflow calls", () => {
+    const wfDir = setup();
+    const remotePath = path.join(
+      tmpDir,
+      "cache",
+      "example__workflows@main",
+      ".github",
+      "workflows",
+      "lint.yml",
+    );
+    fs.mkdirSync(path.dirname(remotePath), { recursive: true });
+    fs.writeFileSync(
+      remotePath,
+      `
+on: workflow_call
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo lint
+`,
+    );
+    const callerWf = path.join(wfDir, "ci.yml");
+    fs.writeFileSync(
+      callerWf,
+      `
+jobs:
+  parent:
+    uses: example/workflows/.github/workflows/parent.yml@main
+`,
+    );
+    const parentPath = path.join(
+      tmpDir,
+      "cache",
+      "example__workflows@main",
+      ".github",
+      "workflows",
+      "parent.yml",
+    );
+    fs.writeFileSync(
+      parentPath,
+      `
+on: workflow_call
+jobs:
+  lint:
+    uses: $/.github/workflows/lint.yml
+`,
+    );
+    const remoteCache = new Map([
+      ["example/workflows/.github/workflows/parent.yml@main", parentPath],
+      ["example/workflows/.github/workflows/lint.yml@main", remotePath],
+    ]);
+
+    const entries = expandReusableJobs(callerWf, tmpDir, remoteCache);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      id: "parent/lint/lint",
+      workflowPath: remotePath,
+      workflowSource: { owner: "example", repo: "workflows", ref: "main" },
     });
   });
 

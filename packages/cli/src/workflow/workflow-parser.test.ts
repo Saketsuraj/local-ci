@@ -2093,6 +2093,55 @@ jobs:
     expect(ref.Ref).toBe("");
   });
 
+  it("resolves repository-root aliases to local actions", async () => {
+    const filePath = writeWorkflowTree(`
+name: Repository Root Alias Test
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: $/actions/foo
+`);
+    const steps = await parseWorkflowSteps(filePath, "test");
+    const ref = (steps[0] as any).Reference;
+
+    expect(ref.RepositoryType).toBe("self");
+    expect(ref.Path).toBe("./actions/foo");
+  });
+
+  it("resolves repository-root aliases in fetched workflows", async () => {
+    const filePath = writeWorkflowTree(`
+name: Repository Root Alias Test
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: $/actions/foo
+`);
+    const steps = await parseWorkflowSteps(
+      filePath,
+      "test",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        owner: "example",
+        repo: "workflows",
+        ref: "main",
+      },
+    );
+    const ref = (steps[0] as any).Reference;
+
+    expect(ref.RepositoryType).toBe("GitHub");
+    expect(ref.Name).toBe("example/workflows");
+    expect(ref.Path).toBe("actions/foo");
+    expect(ref.Ref).toBe("main");
+  });
+
   it("keeps RepositoryType 'GitHub' for remote actions (regression)", async () => {
     const filePath = writeWorkflowTree(`
 name: Remote Action Test

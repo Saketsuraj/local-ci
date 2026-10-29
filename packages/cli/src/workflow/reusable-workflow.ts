@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
+import { parseRemoteRef } from "./remote-workflow-fetch.ts";
+import { resolveRepositoryRootAlias, type WorkflowSource } from "./repository-root-alias.ts";
 
 export interface ExpandedJobEntry {
   /** Composite ID: "callerJobId/calledJobId" for inlined jobs, or original ID */
@@ -19,6 +21,8 @@ export interface ExpandedJobEntry {
   workflowCallOutputDefs?: Record<string, string>;
   /** Original caller job ID (set on inlined sub-jobs) */
   callerJobId?: string;
+  /** Repository that owns this workflow when it was fetched remotely. */
+  workflowSource?: WorkflowSource;
 }
 
 const MAX_REUSABLE_DEPTH = 4;
@@ -63,6 +67,7 @@ function expandReusableJobsInternal(
 
   const raw = parseYaml(fs.readFileSync(workflowPath, "utf-8"));
   const jobs = raw?.jobs ?? {};
+  const workflowSource = sourceForWorkflow(workflowPath, remoteCache);
 
   const entries: ExpandedJobEntry[] = [];
 
@@ -71,7 +76,10 @@ function expandReusableJobsInternal(
   const callerToTerminals = new Map<string, string[]>();
 
   for (const [jobId, jobDef] of Object.entries<any>(jobs)) {
-    const uses = jobDef?.uses;
+    const uses =
+      typeof jobDef?.uses === "string"
+        ? resolveRepositoryRootAlias(jobDef.uses, workflowSource)
+        : jobDef?.uses;
     if (typeof uses === "string") {
       // This is a reusable workflow call
       let calledPath: string;
@@ -144,6 +152,7 @@ function expandReusableJobsInternal(
             ? workflowCallOutputDefs
             : undefined,
         callerJobId: jobId,
+        workflowSource: entry.workflowSource,
       }));
 
       // Compute terminals among the prefixed entries
@@ -167,6 +176,7 @@ function expandReusableJobsInternal(
         workflowPath,
         sourceTaskName: jobId,
         needs: parseNeeds(jobDef?.needs),
+        workflowSource,
       });
     }
   }
@@ -186,6 +196,17 @@ function expandReusableJobsInternal(
   visitedPaths.delete(resolvedPath);
 
   return entries;
+}
+
+function sourceForWorkflow(
+  workflowPath: string,
+  remoteCache: Map<string, string> | undefined,
+): WorkflowSource | undefined {
+  const sourceRef = [...(remoteCache?.entries() ?? [])].find(
+    ([, cachedPath]) => path.resolve(cachedPath) === path.resolve(workflowPath),
+  )?.[0];
+  const parsed = sourceRef ? parseRemoteRef(sourceRef) : null;
+  return parsed ? { owner: parsed.owner, repo: parsed.repo, ref: parsed.ref } : undefined;
 }
 
 function parseNeeds(needs: unknown): string[] {

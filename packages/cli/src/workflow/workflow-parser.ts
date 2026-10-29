@@ -6,6 +6,7 @@ import { promisify } from "util";
 import { minimatch } from "minimatch";
 import { parse as parseYaml } from "yaml";
 import { classifyRunsOn } from "../runner/runs-on-compat.ts";
+import { resolveRepositoryRootAlias, type WorkflowSource } from "./repository-root-alias.ts";
 
 const execFileP = promisify(execFile);
 
@@ -918,6 +919,7 @@ export async function parseWorkflowSteps(
   needsContext?: Record<string, Record<string, string>>,
   inputsContext?: Record<string, string>,
   vars?: Record<string, string>,
+  workflowSource?: WorkflowSource,
 ) {
   const template = await getWorkflowTemplate(filePath);
   const rawYaml = parseYaml(fs.readFileSync(filePath, "utf8"));
@@ -1047,7 +1049,7 @@ export async function parseWorkflowSteps(
         // repository name plus a separate path; otherwise it extracts the repo
         // tarball under _actions/owner/repo/path/ref and then looks for
         // action.yml at the wrong directory level.
-        const uses = step.uses.toString();
+        const uses = resolveRepositoryRootAlias(step.uses.toString(), workflowSource);
         const isLocalAction = uses.startsWith("./");
         let name = uses;
         let ref = "";
